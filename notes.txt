@@ -1,0 +1,2 @@
+pyinstaller --onefile --add-data "logo.png;." app.py
+pyinstaller --onefile --name "SC File Converter" app.py --add-data "logo.png;." --icon="C:\Users\semih\Desktop\Projects\text_to_pdf_converter\logo.ico" -w
