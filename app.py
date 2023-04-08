@@ -30,14 +30,16 @@ class FileDropApp:
 
         # create grid to display dropped files
         self.tree = ttk.Treeview(
-            self.root, columns=("name", "type", "path"), show="headings"
+            self.root, columns=("name", "type", "path", "status"), show="headings"
         )
         self.tree.heading("name", text="Name")
         self.tree.heading("type", text="Type")
         self.tree.heading("path", text="Path")
-        self.tree.column("name", width=200, anchor="center")
-        self.tree.column("type", width=150, anchor="center")
-        self.tree.column("path", width=400, anchor="center")
+        self.tree.heading("status", text="Status")
+        self.tree.column("name", width=100, anchor="center")
+        self.tree.column("type", width=100, anchor="center")
+        self.tree.column("path", width=250, anchor="center")
+        self.tree.column("status", width=150, anchor="center")
         self.tree.pack(fill=tk.BOTH, expand=True)
 
         # allow the grid to accept file drops
@@ -98,7 +100,7 @@ class FileDropApp:
         for path in file_path:
             name = path.split("/")[-1]
             file_type = self.get_file_type(path)
-            self.tree.insert("", tk.END, values=(name, file_type, path))
+            self.tree.insert("", tk.END, values=(name, file_type, path, ""), tags=("file",))
 
     def drag_n_drop(self, event):
         self.tree.config(style="dragdrop.Treeview")
@@ -149,6 +151,7 @@ class FileDropApp:
                     self.convert_to_output_type(item, path, output_path)
                 except Exception as e:
                     print(f"Conversion of {path} failed with error: {e}")
+                    continue
             print("Conversion process completed.")
         else:
             for item in selected_items:
@@ -161,16 +164,22 @@ class FileDropApp:
                     self.convert_to_output_type(item, path, output_path)
                 except Exception as e:
                     print(f"Conversion of {path} failed with error: {e}")
+                    continue
             print("Conversion process completed.")
 
         # enable the "Convert" button and update treeview
         for item in selected_items:
             name = self.tree.item(item, "values")[0]
             file_type = self.get_file_type(self.tree.item(item, "values")[2])
+            # update status to "Converted" if file was converted successfully
+            status = "Converted" if file_type == self.output_type.get() else "Failed"
             self.tree.item(
-                item, values=(name, file_type, self.tree.item(item, "values")[2])
+                item, values=(name, file_type, self.tree.item(item, "values")[2], status)
             )
+            self.tree.item(item, tags=("file",))
+
         self.convert_button.config(state=tk.NORMAL)
+
 
 
     def convert_to_output_type(self, item, path, output_path):
@@ -220,7 +229,8 @@ class FileDropApp:
         # Update the path in the treeview with the output path
         name = os.path.splitext(os.path.basename(path))[0] + f".{self.output_type.get().lower()}"
         file_type = self.get_file_type(output_path)
-        self.tree.item(item, values=(name, file_type, output_path))
+        self.tree.item(item, values=(name, file_type, output_path, "Converted"), tags=("file",))
+
 
 
 
