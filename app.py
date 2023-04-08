@@ -8,6 +8,8 @@ from pathlib import Path
 import subprocess
 import platform
 import sys
+import traceback
+from PIL import Image
 
 
 class FileDropApp:
@@ -15,8 +17,14 @@ class FileDropApp:
         self.root = tk.Tk()
         self.root.geometry("650x400")
         self.root.title("SC File Converter")
-        # load image file
-        logo_path = os.path.join(sys._MEIPASS, "logo.png")
+        # check if running from PyInstaller bundle
+        if getattr(sys, "frozen", False):
+            bundle_dir = sys._MEIPASS
+        else:
+            bundle_dir = os.path.abspath(os.path.dirname(__file__))
+
+        # use the bundle_dir variable to locate the logo file
+        logo_path = os.path.join(bundle_dir, "logo.png")
         logo_image = tk.PhotoImage(file=logo_path)
 
         # set logo as window icon
@@ -123,6 +131,7 @@ class FileDropApp:
     def convert_files(self):
         # disable the "Convert" button
         self.convert_button.config(state=tk.DISABLED)
+        print("Conversion process started.")
 
         # get selected files and convert to selected output type
         selected_items = self.tree.selection()
@@ -135,14 +144,22 @@ class FileDropApp:
                 path = self.tree.item(item, "values")[2]
                 output_name = os.path.splitext(os.path.basename(path))[0] + ".pdf"
                 output_path = os.path.join(output_dir, output_name)
-                self.convert_to_output_type(item, path, output_path)
+                try:
+                    self.convert_to_output_type(item, path, output_path)
+                except Exception as e:
+                    print(f"Conversion of {path} failed with error: {e}")
+            print("Conversion process completed.")
         else:
             for item in selected_items:
                 path = self.tree.item(item, "values")[2]
                 output_name = os.path.splitext(os.path.basename(path))[0] + ".pdf"
                 output_dir = os.path.dirname(path)
                 output_path = os.path.join(output_dir, output_name)
-                self.convert_to_output_type(item, path, output_path)
+                try:
+                    self.convert_to_output_type(item, path, output_path)
+                except Exception as e:
+                    print(f"Conversion of {path} failed with error: {e}")
+            print("Conversion process completed.")
 
         # enable the "Convert" button and update treeview
         for item in selected_items:
@@ -152,6 +169,7 @@ class FileDropApp:
                 item, values=(name, file_type, self.tree.item(item, "values")[2])
             )
         self.convert_button.config(state=tk.NORMAL)
+
 
     def convert_to_output_type(self, item, path, output_path):
         # convert file to selected output type and update treeview
@@ -175,15 +193,27 @@ class FileDropApp:
 
         elif path.endswith((".jpg", ".jpeg", ".png", ".bmp")):
             # convert image file to PDF
-            with Image.open(path) as img:
-                img = img.convert("RGB")
-                with open(output_path, "wb") as f:
-                    f.write(img2pdf.convert(img.filename))
+            image = Image.open(path)
+            width, height = image.size
+            pdf = FPDF(unit="pt", format="A4")
+            pdf.add_page()
+            # resize image to fit the page
+            if width > height:
+                height = (height * pdf.w) / width
+                width = pdf.w
+            else:
+                width = (width * pdf.h) / height
+                height = pdf.h
+            # add the image dead center and resize it to fit the page
+            pdf.image(path, (pdf.w - width) / 2, (pdf.h - height) / 2, width, height)
+            pdf.output(output_path)
 
         # update the path in the treeview with the output path
         name = os.path.splitext(os.path.basename(path))[0] + ".pdf"
         file_type = self.get_file_type(output_path)
         self.tree.item(item, values=(name, file_type, output_path))
+
+
 
     def delete_row(self):
         # delete selected rows from treeview
