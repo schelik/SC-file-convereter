@@ -1,6 +1,4 @@
 import os
-from PIL import Image
-import img2pdf
 import tkinter as tk
 from tkinter import ttk, filedialog
 from fpdf import FPDF
@@ -8,12 +6,12 @@ from pathlib import Path
 import subprocess
 import platform
 import sys
-import traceback
-from PIL import Image
-
+from PIL import Image as PILImage
+from pillow_heif import register_heif_opener
 
 class FileDropApp:
     def __init__(self):
+        register_heif_opener()
         self.root = tk.Tk()
         self.root.geometry("650x400")
         self.root.title("SC File Converter")
@@ -72,7 +70,9 @@ class FileDropApp:
         # create a dropdown menu to select output file type
         self.output_type = tk.StringVar()
         self.output_type.set("PDF")
-        self.output_menu = ttk.OptionMenu(self.frame, self.output_type, "PDF", "PDF")
+        self.output_menu = ttk.OptionMenu(
+            self.frame, self.output_type, "PDF", "PDF", "PNG"
+        )
         self.output_menu.pack(side=tk.LEFT, padx=10)
 
         # create a button to convert files to selected output type
@@ -142,7 +142,8 @@ class FileDropApp:
         if output_dir:
             for item in selected_items:
                 path = self.tree.item(item, "values")[2]
-                output_name = os.path.splitext(os.path.basename(path))[0] + ".pdf"
+                output_ext = self.output_type.get().lower()
+                output_name = os.path.splitext(os.path.basename(path))[0] + f".{output_ext}"
                 output_path = os.path.join(output_dir, output_name)
                 try:
                     self.convert_to_output_type(item, path, output_path)
@@ -152,7 +153,8 @@ class FileDropApp:
         else:
             for item in selected_items:
                 path = self.tree.item(item, "values")[2]
-                output_name = os.path.splitext(os.path.basename(path))[0] + ".pdf"
+                output_ext = self.output_type.get().lower()
+                output_name = os.path.splitext(os.path.basename(path))[0] + f".{output_ext}"
                 output_dir = os.path.dirname(path)
                 output_path = os.path.join(output_dir, output_name)
                 try:
@@ -193,7 +195,7 @@ class FileDropApp:
 
         elif path.endswith((".jpg", ".jpeg", ".png", ".bmp")):
             # convert image file to PDF
-            image = Image.open(path)
+            image = PILImage.open(path)
             width, height = image.size
             pdf = FPDF(unit="pt", format="A4")
             pdf.add_page()
@@ -208,8 +210,15 @@ class FileDropApp:
             pdf.image(path, (pdf.w - width) / 2, (pdf.h - height) / 2, width, height)
             pdf.output(output_path)
 
-        # update the path in the treeview with the output path
-        name = os.path.splitext(os.path.basename(path))[0] + ".pdf"
+        # Add a new condition to handle HEIC to PNG conversion
+        elif path.endswith(".heic"):
+            # convert HEIC file to PNG
+            image = PILImage.open(path)
+            image.save(output_path, "png")
+
+
+        # Update the path in the treeview with the output path
+        name = os.path.splitext(os.path.basename(path))[0] + f".{self.output_type.get().lower()}"
         file_type = self.get_file_type(output_path)
         self.tree.item(item, values=(name, file_type, output_path))
 
