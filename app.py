@@ -9,11 +9,10 @@ import sys
 from PIL import Image as PILImage
 from pillow_heif import register_heif_opener
 
-class FileDropApp:
+class App:
     def __init__(self):
         register_heif_opener()
         self.root = tk.Tk()
-        self.root.geometry("650x400")
         self.root.title("SC File Converter")
         # check if running from PyInstaller bundle
         if getattr(sys, "frozen", False):
@@ -45,12 +44,14 @@ class FileDropApp:
         # allow the grid to accept file drops
         self.tree.bind("<Button-1>", lambda event: self.tree.selection_clear())
         self.tree.bind("<Button-1>", self.select_item, True)
-        self.tree.bind("<B1-Motion>", self.drag_n_drop)
+        # self.tree.bind("<B1-Motion>", self.drag_n_drop)
+        self.tree.bind("<B1-Motion>", self.on_motion)
         self.tree.bind("<ButtonRelease-1>", self.drop_files)
         self.tree.bind(
             "<Enter>", lambda event: self.tree.config(style="hover.Treeview")
         )
         self.tree.bind("<Leave>", lambda event: self.tree.config(style="Treeview"))
+        self.tree.bind("<Double-1>", lambda event: self.open_file_location())
         self.tree.config(selectmode="extended", style="Treeview")
 
         # add a scrollbar to the grid
@@ -85,13 +86,47 @@ class FileDropApp:
 
         # create a context menu to delete rows and open file location
         self.context_menu = tk.Menu(self.tree, tearoff=0)
-        self.context_menu.add_command(
-            label="Open File Location", command=self.open_file_location
-        )
         self.context_menu.add_command(label="Delete", command=self.delete_row)
         self.tree.bind("<Button-3>", self.show_context_menu)
 
+
+        self.create_window()
         self.root.mainloop()
+
+    def open_file_location(self):
+        selected_item = self.tree.selection()
+        if not selected_item:
+            return
+        file_path = self.tree.item(selected_item, "values")[2]
+        folder_path = os.path.dirname(file_path)
+
+        # Open the folder containing the file
+        if platform.system() == "Windows":
+            os.startfile(folder_path)
+        elif platform.system() == "Darwin":
+            subprocess.Popen(["open", folder_path])
+        else:
+            subprocess.Popen(["xdg-open", folder_path])
+
+
+    def on_motion(self, event):
+        item = self.tree.identify_row(event.y)
+        if item and item not in self.tree.selection():
+            self.tree.selection_add(item)
+
+        
+    def create_window(self):
+        # center the window on the screen
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+
+        app_width = 650
+        app_height = 400
+
+        x = (screen_width / 2) - (app_width / 2)
+        y = (screen_height / 2) - (app_height / 2)
+
+        self.root.geometry(f"{app_width}x{app_height}+{int(x)}+{int(y)}")
 
     def open_file_dialog(self):
         # open file dialog to select file
@@ -193,7 +228,7 @@ class FileDropApp:
 
         if path.endswith(".txt"):
             # convert text file to PDF
-            with open(path, "r") as f:
+            with open(path, "r", encoding="latin-1", errors="ignore") as f:
                 text = f.read()
 
             pdf = FPDF()
@@ -220,7 +255,7 @@ class FileDropApp:
             pdf.output(output_path)
 
         # Add a new condition to handle HEIC to PNG conversion
-        elif path.endswith(".heic"):
+        elif path.lower().endswith(".heic"):
             # convert HEIC file to PNG
             image = PILImage.open(path)
             image.save(output_path, "png")
@@ -230,8 +265,6 @@ class FileDropApp:
         name = os.path.splitext(os.path.basename(path))[0] + f".{self.output_type.get().lower()}"
         file_type = self.get_file_type(output_path)
         self.tree.item(item, values=(name, file_type, output_path, "Converted"), tags=("file",))
-
-
 
 
     def delete_row(self):
@@ -244,33 +277,12 @@ class FileDropApp:
         # show context menu at the selected row
         iid = self.tree.identify_row(event.y)
         if iid:
-            self.tree.selection_set(iid)
+            if iid not in self.tree.selection():
+                self.tree.selection_set(iid)
             self.context_menu.post(event.x_root, event.y_root)
 
-    def open_file_location(self):
-        selected_items = self.tree.selection()
-        if not selected_items:
-            return
 
-        for item in selected_items:
-            path = Path(self.tree.item(item, "values")[2]).resolve()
-            parent_dir = path.parent
-            # open the file explorer or finder to the parent directory containing the file
-            # get the operating system name
-            operating_system = platform.system()
-
-            # open the file explorer or finder to the parent directory containing the file
-            if operating_system == "Darwin":
-                subprocess.run(["open", parent_dir], check=True)  # for macOS
-            elif operating_system == "Windows":
-                subprocess.run(
-                    ["explorer", "/select,", str(path)], check=True
-                )  # for Windows
-            elif operating_system == "Linux":
-                subprocess.run(["nautilus", parent_dir], check=True)  # for Linux
-            else:
-                print("Unsupported operating system.")
 
 
 if __name__ == "__main__":
-    app = FileDropApp()
+    app = App()
