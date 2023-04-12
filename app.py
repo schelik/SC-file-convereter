@@ -218,6 +218,7 @@ class App:
 
 
     def convert_to_output_type(self, item, path, output_path):
+        path = path.lower()
         # convert file to selected output type and update treeview
         if path.endswith(".pdf"):
             # file is already a PDF, so no conversion needed
@@ -255,7 +256,7 @@ class App:
             pdf.output(output_path)
 
         # Add a new condition to handle HEIC to PNG conversion
-        elif path.lower().endswith(".heic"):
+        elif path.endswith(".heic"):
             # convert HEIC file to PNG
             image = PILImage.open(path)
             image.save(output_path, "png")
