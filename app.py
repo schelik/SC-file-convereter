@@ -8,6 +8,9 @@ import platform
 import sys
 from PIL import Image as PILImage
 from pillow_heif import register_heif_opener
+import time
+import concurrent.futures
+import threading
 
 class App:
     def __init__(self):
@@ -168,54 +171,74 @@ class App:
     def convert_files(self):
         # disable the "Convert" button
         self.convert_button.config(state=tk.DISABLED)
-        print("Conversion process started.")
 
+        # Run the conversion process in a separate thread to avoid freezing the app
+        conversion_thread = threading.Thread(target=self._conversion_process, daemon=True)
+        conversion_thread.start()
+
+
+    def _conversion_process(self):
         # get selected files and convert to selected output type
         selected_items = self.tree.selection()
         if not selected_items:
+            self.convert_button.config(state=tk.NORMAL)
             return
 
         output_dir = filedialog.askdirectory(title="Select Output Directory")
-        if output_dir:
-            for item in selected_items:
-                path = self.tree.item(item, "values")[2]
-                output_ext = self.output_type.get().lower()
-                output_name = os.path.splitext(os.path.basename(path))[0] + f".{output_ext}"
-                output_path = os.path.join(output_dir, output_name)
-                try:
-                    self.convert_to_output_type(item, path, output_path)
-                except Exception as e:
-                    print(f"Conversion of {path} failed with error: {e}")
-                    continue
-            print("Conversion process completed.")
-        else:
-            for item in selected_items:
-                path = self.tree.item(item, "values")[2]
-                output_ext = self.output_type.get().lower()
-                output_name = os.path.splitext(os.path.basename(path))[0] + f".{output_ext}"
-                output_dir = os.path.dirname(path)
-                output_path = os.path.join(output_dir, output_name)
-                try:
-                    self.convert_to_output_type(item, path, output_path)
-                except Exception as e:
-                    print(f"Conversion of {path} failed with error: {e}")
-                    continue
-            print("Conversion process completed.")
 
-        # enable the "Convert" button and update treeview
-        for item in selected_items:
-            name = self.tree.item(item, "values")[0]
-            file_type = self.get_file_type(self.tree.item(item, "values")[2])
-            # update status to "Converted" if file was converted successfully
-            status = "Converted" if file_type == self.output_type.get() else "Failed"
+        # Check if the user pressed the cancel button
+        if not output_dir:
+            self.convert_button.config(state=tk.NORMAL)
+            return
+
+        start_time = time.time()  # Record the start time before conversion
+        print("Conversion process started.")
+
+        # Define a function to process a single file
+        def process_file(item):
+            path = self.tree.item(item, "values")[2]
+            output_ext = self.output_type.get().lower()
+            old_name = os.path.basename(path)
+            output_name = os.path.splitext(old_name)[0] + f".{output_ext}"
+            output_path = os.path.join(output_dir, output_name)
+            try:
+                self.convert_to_output_type(item, path, output_path)
+                self.update_status(item, "Converted", output_name, output_path, output_ext.upper())
+            except Exception as e:
+                print(f"Conversion of {path} failed with error: {e}")
+                self.update_status(item, "Failed", output_name, path, self.get_file_type(path))
+                return
+
+
+        # Use a ThreadPoolExecutor to process files concurrently
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # Submit the process_file function for each selected item
+            futures = {executor.submit(process_file, item): item for item in selected_items}
+
+            for future in concurrent.futures.as_completed(futures):
+                item = futures[future]
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f"Thread for {item} raised an exception: {e}")
+
+        end_time = time.time()  # Record the end time after conversion
+        elapsed_time = end_time - start_time
+        print(f"Conversion process completed. Time taken: {elapsed_time:.2f} seconds.")
+
+        # enable the "Convert" button
+        self.root.after(0, lambda: self.convert_button.config(state=tk.NORMAL))
+
+    
+
+    def update_status(self, item, status, new_name, new_path, new_file_type):
+        def _update_status():
             self.tree.item(
-                item, values=(name, file_type, self.tree.item(item, "values")[2], status)
+                item, values=(new_name, new_file_type, new_path, status)
             )
             self.tree.item(item, tags=("file",))
 
-        self.convert_button.config(state=tk.NORMAL)
-
-
+        self.root.after(0, _update_status)
 
     def convert_to_output_type(self, item, path, output_path):
         path = path.lower()
@@ -267,6 +290,7 @@ class App:
         file_type = self.get_file_type(output_path)
         self.tree.item(item, values=(name, file_type, output_path, "Converted"), tags=("file",))
 
+    
 
     def delete_row(self):
         # delete selected rows from treeview

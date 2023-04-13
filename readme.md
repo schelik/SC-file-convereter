@@ -8,6 +8,7 @@ SC File Converter is a simple application that allows users to convert files fro
 - Supports conversion of text files to PDF format
 - Supports conversion of image files (JPG, PNG, BMP) to PDF format
 - Ability to select output format and destination directory
+- Multithreading implementation for faster conversion of multiple files
 - Simple and intuitive user interface
 
 ## Installation
